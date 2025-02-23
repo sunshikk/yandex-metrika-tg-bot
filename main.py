@@ -6,7 +6,7 @@ import requests
 
 from aiogram import Bot, Dispatcher, Router, types
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 
@@ -28,64 +28,70 @@ BOT_TOKEN = os.environ["TOKEN"]
 bot = Bot(token=BOT_TOKEN) # токен, который будет в качестве переменной на хостинге
 dp = Dispatcher() # переменная диспетчера
 router = Router() # переменная роутера
-YANDEX_METRIKA_TOKEN = 'y0__xCqiIblBxiluzUgzPXSrBImnXWxjnlSv8r8kX6xHGJJeR6sjg'
-COUNTER_ID = '100012253'
+YANDEX_METRIKA_TOKEN = os.environ["TOKEN_YANDEX"]
+COUNTER_ID = os.environ["COUNTER_ID"]
 
+# Определяем класс для работы с API Яндекс Метрики
 class YandexMetrica:
-    def __init__(self, token):  # Исправлено на __init__
-        self.token = token
-        self.base_url = "https://api-metrika.yandex.net/stat/v1/data"
+    def __init__(self, token):  # Конструктор класса, принимающий токен API
+        self.token = token  # Сохраняем токен в объекте
+        self.base_url = "https://api-metrika.yandex.net/stat/v1/data"  # Базовый URL API
 
-    def get_data(self, counter_id, params):
-        headers = {
-            "Authorization": f"OAuth {self.token}"
+    def get_data(self, counter_id, params):  # Метод для получения данных
+        headers = {  # Заголовки запроса
+            "Authorization": f"OAuth {self.token}"  # Передаём токен в заголовке
         }
-        params['ids'] = counter_id
-        response = requests.get(self.base_url, headers=headers, params=params)
-        print(response)
+        params['ids'] = counter_id  # Добавляем ID счетчика в параметры запроса
+        response = requests.get(self.base_url, headers=headers, params=params)  # Отправляем GET-запрос
+        print(response)  # Выводим объект ответа в консоль
 
-        if response.status_code == 200:
-            return response.json()
+        if response.status_code == 200:  # Если запрос успешен (код 200)
+            return response.json()  # Возвращаем JSON-ответ
         else:
-            logging.error(f"Error: {response.status_code}, {response.text}")
-            if response.status_code == 403:
-                logging.error("Access Denied: Проверьте токен и права доступа к счетчику.")
-            return None
+            logging.error(f"Error: {response.status_code}, {response.text}")  # Логируем ошибку
+            if response.status_code == 403:  # Если ошибка 403 (доступ запрещён)
+                logging.error("Access Denied: Проверьте токен и права доступа к счетчику.")  # Выводим сообщение
+            return None  # Возвращаем None в случае ошибки
+
+# Функция для проверки, является ли строка датой
 
 def is_date(text):
-    allowed_chars = string.digits + "-"
-    for char in text:
-        if char not in allowed_chars:
-            return False
-    return True
+    allowed_chars = string.digits + "-"  # Разрешённые символы (цифры и дефис)
+    for char in text:  # Перебираем символы в строке
+        if char not in allowed_chars:  # Если символ не входит в список разрешённых
+            return False  # Возвращаем False
+    return True  # Если всё ок, возвращаем True
 
-@router.message(CommandStart())
+@router.message(CommandStart())  # Хэндлер для команды /start
 async def start_command(message: types.Message):
-    await message.answer("🤖 Это бот для работы с Яндекс Метрикой. Нажми на подходящую кнопку для запроса статистики.", reply_markup=choicestart)
+    await message.answer("🤖 Это бот для работы с Яндекс Метрикой. Нажми на подходящую кнопку для запроса статистики.", reply_markup=choicestart)  # Отправляем приветственное сообщение
 
+# Хэндлер для получения первой даты (начало периода)
 @router.message(Form.date1)
 async def date1(message: types.Message, state: FSMContext):
-    if is_date(message.text):
-        await state.update_data(date1=message.text)
-        await state.set_state(Form.date2)
-        await message.answer("✍️ Отправьте дату по какое число, месяц и год нужна статистика (пример: 2025-02-28)")
+    if is_date(message.text):  # Проверяем, является ли введённый текст датой
+        await state.update_data(date1=message.text)  # Сохраняем дату в состояние
+        await state.set_state(Form.date2)  # Устанавливаем следующее состояние
+        await message.answer("✍️ Отправьте дату по какое число, месяц и год нужна статистика (пример: 2025-02-28)")  # Запрашиваем вторую дату
     else:
-        await message.answer("❌ Отправьте сообщение в формате даты (пример: 2025-11-11)")
+        await message.answer("❌ Отправьте сообщение в формате даты (пример: 2025-11-11)")  # Сообщаем об ошибке ввода
 
+# Аналогичный хэндлер, но для UTM-меток
 @router.message(Form.date1utm)
 async def date1utm(message: types.Message, state: FSMContext):
-    if is_date(message.text):
-        await state.update_data(date1utm=message.text)
-        await state.set_state(Form.date2utm)
+    if is_date(message.text):  # Проверяем дату
+        await state.update_data(date1utm=message.text)  # Сохраняем в state
+        await state.set_state(Form.date2utm)  # Переключаем состояние
         await message.answer("✍️ Отправьте дату по какое число, месяц и год нужна статистика (пример: 2025-02-28)")
     else:
         await message.answer("❌ Отправьте сообщение в формате даты (пример: 2025-11-11)")
 
+# Хэндлер для получения второй даты и запроса статистики
 @router.message(Form.date2)
 async def date2(message: types.Message, state: FSMContext):
-    dataaa = await state.get_data()
-    if is_date(message.text):
-        metrika = YandexMetrica(YANDEX_METRIKA_TOKEN)
+    dataaa = await state.get_data()  # Получаем сохранённые данные
+    if is_date(message.text):  # Проверяем дату
+        metrika = YandexMetrica(YANDEX_METRIKA_TOKEN)  # Создаём объект API
 
         params = {
             "ids": COUNTER_ID,
@@ -95,24 +101,24 @@ async def date2(message: types.Message, state: FSMContext):
             "accuracy": "full"
         }
 
-        data = metrika.get_data(COUNTER_ID, params)
+        data = metrika.get_data(COUNTER_ID, params)  # Запрашиваем данные
         print("Raw data from Yandex Metrica:")
-        print(data)
+        print(data)  # Выводим в консоль полученные данные
 
-        response_text = ""
+        response_text = ""  # Строка ответа
 
-        if data and data['data']:
+        if data and data['data']:  # Если данные получены
             report_data = data['data'][0]
-
-            metrics_data = report_data.get('metrics')
-            if metrics_data and isinstance(metrics_data, list):
-                visits = metrics_data[0] if len(metrics_data) > 0 else 0
+            
+            metrics_data = report_data.get('metrics')  # Достаём метрики
+            if metrics_data and isinstance(metrics_data, list):  # Проверяем формат данных
+                visits = metrics_data[0] if len(metrics_data) > 0 else 0  # Извлекаем метрики
                 pageviews = metrics_data[1] if len(metrics_data) > 1 else 0
                 users = metrics_data[2] if len(metrics_data) > 2 else 0
                 new_users = metrics_data[3] if len(metrics_data) > 3 else 0
                 bounce_rate = metrics_data[4] if len(metrics_data) > 4 else 0
                 avg_duration = metrics_data[5] if len(metrics_data) > 5 else 0
-
+                
                 response_text = (
                     f"📊 Статистика за промежуток: {dataaa.get('date1')} - {message.text}\n\n"
                     f"👁 Посещения: {int(visits)}\n"
@@ -124,15 +130,13 @@ async def date2(message: types.Message, state: FSMContext):
                 )
             else:
                 response_text = "❌ Неверный формат данных статистики.\n"
-                print("Ошибка: Неверный формат metrics_data:", metrics_data)
         else:
             response_text = "❌ Не удалось получить данные статистики.\n"
-            print("Ошибка: Не удалось получить данные из data['data']")
-
-        await message.answer(response_text)
-        await state.clear()
+        
+        await message.answer(response_text)  # Отправляем ответ пользователю
+        await state.clear()  # Очищаем состояние
     else:
-        await message.answer("❌ Отправьте сообщение в формате даты (пример: 2025-11-11)")
+        await message.answer("❌ Отправьте сообщение в формате даты (пример: 2025-11-11)")  # Ошибка ввода
 
 @router.message(Form.date2utm)
 async def date2utm(message: types.Message, state: FSMContext):
